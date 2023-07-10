@@ -1,0 +1,593 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(tidyverse)
+library(modelr)
+library(caret)
+library(kableExtra)
+library(gridExtra)
+library(scales)
+library(ggrepel)
+set.seed(320023)
+```
+
+# INTRODUCTION
+
+Police brutality has been on the forefront of the national stage in recent years, especially following the murder of George Floyd and the successive Black Lives Matter movement. The nation becomes increasingly more hostile with each new headline of another life lost at the hands of police. When did our protective forces also become judge, jury, and executioner? After discovering that fatal police shootings were severely under-counted by the FBI, the Washington Post began tracking every fatal police shooting in the United States. Over the past seven years, over one thousand citizens have been shot and killed by police per year. Why does this happen?
+
+My data analysis examines the variables associated with being fatally shot by a police officer. Some of these variables pertain to the victim’s demographic features, including **Race**, **Gender**, **Age**, and **Signs Of Mental Illness**. Other variables relate to the details of the shooting incident, including the **Threat Level** imposed by the victim, their **Armed Status**, and the **City** and **State** in which the shooting took place. This initial exploratory data analysis focused on the interactions between these variables, leading me to question which variables were the most telling in leading to being fatally shot by the police. 
+
+The first question that I have chosen to explore relates to the incidence of fatal shootings by police in different cities as compared to overall crime rates in these cities. Understanding the relationship between fatal police shootings and the general crime rate for each city can give me insight into potential future shootings within certain crime-ridden cities. My second question pertains to the variables that have the largest correlation with high threat levels imposed by the victim. The threat level imposed by the victim is a subjective measure of how endangered the police officer felt in that moment. I are curious as to how demographic components like **Race** and **Gender** can play into perceived **Threat Level** based on internal bias, as opposed to situational factors like whether the victim attempted to flee the scene. I also want to see how the victim’s city environment impacts their threat level. With this knowledge, I can make predictions about future occurrences between police and civilians, in order to examine whether the civilian would pose enough threat to the police to warrant being fatally shot.
+
+
+# DATA
+This data set was compiled by the Washington Post after they discovered that the FBI was under-counting fatal police shootings. It includes 6,953 observations, representing fatal police shootings over the course of January 2, 2015 to January 13, 2022. There are sixteen total variables which include information about the victim’s identity as well as the incident of the shooting. Some of these variables were more important to my data analysis than others and will allow me to find answers to the questions posed above.
+
+I regarded the demographic features as important variables in my exploration of the data. The **Race** variable classifies the racial background of the victim. The **Gender** variable refers to the gender expression of the victim; if the person’s gender expression differed from their biological sex, The Washington Post listed the gender that the victim identified within the report. Information pertinent to the shooting was also included in this exploration. The **Flee** variable refers to the victim’s attempt to escape from the police. The **Threat Level** variable explains the level of threat that the police felt was being imposed on them by the victim. The **City** and **State** variables describe the location at which the shooting occurred.
+
+The key variables that piqued my interest were the **City** and **Threat Level** variables, which is how I formulated these questions. I created a new variable named **Fatal Police Shootings**, which is the count of fatal police shootings in each city. In order to look at individual city crime rates, I compiled data from the FBI’s Uniform Crime Report (UCR). The UCR is a yearly report of crimes submitted by state and local law enforcement agencies to the FBI. For this analysis, I focused on the 2018 report, which contains crime statistics for 9,252 cities. There are 10 variables that I used from this data set: **State**, **City**, **Population**, **Murder**, **Rape**, **Aggravated Assault**, **Robbery**, **Burglary**, **Larceny**, and **Vehicle Theft**. It is important to note that there was limited data for Iowa and North Carolina, as these states used a different definition of rape in 2018 than the official UCR definition. Therefore, cities from these states are not included in the data set.
+
+After joining the two data sets by **City** and **State**, I calculated each crime statistic per 100,000 city residents. Since the first question is only looking at the relationship between **Fatal Police Shootings** in cities and the crime rates in that city, I created two separate data sets. Each row  in the data set for the first question contains the city name, state name, the rate of fatal police shootings in that city, and their crime rates in the UCR. The data set for the second question includes all of the variables from the Washington Post data set and the UCR. Each row contains the demographics of each victim and the crime rates from the city where the shooting occurred. 
+
+**QUESTION 1 **
+```{r,echo=FALSE,message = FALSE,warning = FALSE}
+FBI = read_csv("Table_8_Offenses_Known_to_Law_Enforcement_by_State_by_City_2018.csv")
+
+fixed_FBI = FBI
+fixed_FBI = FBI[-c(nrow(FBI), nrow(FBI) - 1, nrow(FBI)-2, nrow(FBI)-3, nrow(FBI)-4, nrow(FBI)-5, nrow(FBI)-6, nrow(FBI)-7, nrow(FBI)-8, nrow(FBI)-9), ]
+
+fixed_FBI$State = recode(fixed_FBI$State, "ALABAMA" = "AL", "ALASKA" = "AK", "ARIZONA" = "AZ", "ARKANSAS" = "AR",
+                         "CALIFORNIA" = "CA", "COLORADO" = "CO", "CONNECTICUT" = "CT", "DELAWARE" = "DE", 
+                         "DISTRICT OF COLUMBIA" = "DC", "FLORIDA" = "FL", "GEORGIA" = "GA", "HAWAII" = "HI", 
+                         "IDAHO" = "ID", "ILLINOIS" = "IL", "INDIANA" = "IN", "IOWA7" = "IA", "KANSAS" = "KS",
+                         "KENTUCKY" = "KT", "LOUISIANA" = "LA", "MAINE" = "ME", "MARYLAND" = "MD", 
+                         "MASSACHUSETTS" = "MA", "MICHIGAN" = "MI", "MINNESOTA" = "MN","MISSISSIPPI" = "MS",
+                         "MISSOURI" = "MO", "MONTANA" = "MT", "NEBRASKA" = "NE", "NEVADA" = "NV", 
+                         "NEW HAMPSHIRE" = "NH", "NEW JERSEY" = "NJ", "NEW MEXICO" = "NM", "NEW YORK" = "NY", 
+                         "NORTH CAROLINA8" = "NC", "NORTH DAKOTA" = "ND", "OHIO" = "OH", "OKLAHOMA" = "OK",
+                         "OREGON" = "OR", "PENNSYLVANIA" = "PA", "RHODE ISLAND" = "RI", "SOUTH CAROLINA" = "SC", 
+                         "SOUTH DAKOTA" = "SD", "TENNESSEE" = "TN", "TEXAS" = "TX", "UTAH" = "UT", "VERMONT" = "VT",
+                         "VIRGINIA" = "VA", "WASHINGTON" = "WA", "WEST VIRGINIA" = "WV", "WISCONSIN" = "WI",
+                         "WYOMING" = "WY")
+
+replace = ""
+for(i in seq_along(fixed_FBI$State)){
+  if(is.na(fixed_FBI$State[[i]])){
+    fixed_FBI$State[[i]] = replace
+  } else{
+    replace = fixed_FBI$State[[i]]
+  }
+}
+
+final_FBI = fixed_FBI %>% 
+  dplyr::select(-Arson2) %>% 
+  rename("Violent Crime" = "Violent\ncrime",
+    "Murder" = "Murder and\nnonnegligent\nmanslaughter", 
+    "Rape" = "Rape1", 
+    "Aggravated Assault" = "Aggravated\nassault", 
+    "Property Crime" = "Property\ncrime", 
+    "Larceny" = "Larceny-\ntheft",
+    "Vehicle Theft" = "Motor\nvehicle\ntheft")
+
+FBI4 = final_FBI %>%
+              mutate(City=str_replace_all(City,"[,(0-9)]{1}","")) %>% 
+              mutate(City=ifelse(City=="Charlotte-Mecklenburg","Charlotte",City)) %>% 
+             mutate(City=str_replace(City," Metro",""))
+
+Fatal = read_csv("fatal-police-shootings-data.csv")
+
+Fatal2 = Fatal %>% 
+  rename("City" = "city", "State" = "state") %>% 
+  group_by(City, State) %>% 
+  summarize(
+    'Fatal Police Shootings' = n()
+  ) %>% 
+  ungroup() %>% 
+  arrange(desc(`Fatal Police Shootings`))
+
+Fatal3 = Fatal2 %>% 
+  inner_join(FBI4, by = c("City", "State"))
+
+Fatal_scaled = Fatal3 %>% 
+  transmute(City = City, 
+            State = State, 
+            Population = Population,
+            `Fatal Police Shootings Per 100,000` = (`Fatal Police Shootings` / Population) * 100000,
+            `Murder Per 100,000` = (Murder / Population) * 100000,
+            `Rape Per 100,000` = (Rape / Population) * 100000, 
+            `Robbery Per 100,000` = (Robbery / Population) * 100000,
+            `Aggravated Assault Per 100,000` = (`Aggravated Assault` / Population) * 100000,
+            `Burglary Per 100,000` = (Burglary / Population) * 100000,
+            `Larceny Per 100,000` = (Larceny / Population) * 100000,
+            `Vehicle Theft Per 100,000` = (`Vehicle Theft` / Population) * 100000
+            ) %>% drop_na()
+
+head(Fatal_scaled) %>% 
+  kbl() %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+```
+
+**QUESTION 2 **
+```{r,echo=FALSE,warning=FALSE,message = FALSE}
+Fatal = read_csv("fatal-police-shootings-data.csv")
+
+FBI = read_csv("Table_8_Offenses_Known_to_Law_Enforcement_by_State_by_City_2018.csv")
+
+fixed_FBI = FBI
+fixed_FBI = FBI[-c(nrow(FBI), nrow(FBI) - 1, nrow(FBI)-2, nrow(FBI)-3, nrow(FBI)-4, nrow(FBI)-5, nrow(FBI)-6, nrow(FBI)-7, nrow(FBI)-8, nrow(FBI)-9), ]
+
+fixed_FBI$State = recode(fixed_FBI$State, "ALABAMA" = "AL", "ALASKA" = "AK", "ARIZONA" = "AZ", "ARKANSAS" = "AR",
+                         "CALIFORNIA" = "CA", "COLORADO" = "CO", "CONNECTICUT" = "CT", "DELAWARE" = "DE", 
+                         "DISTRICT OF COLUMBIA" = "DC", "FLORIDA" = "FL", "GEORGIA" = "GA", "HAWAII" = "HI", 
+                         "IDAHO" = "ID", "ILLINOIS" = "IL", "INDIANA" = "IN", "IOWA7" = "IA", "KANSAS" = "KS",
+                         "KENTUCKY" = "KT", "LOUISIANA" = "LA", "MAINE" = "ME", "MARYLAND" = "MD", 
+                         "MASSACHUSETTS" = "MA", "MICHIGAN" = "MI", "MINNESOTA" = "MN","MISSISSIPPI" = "MS",
+                         "MISSOURI" = "MO", "MONTANA" = "MT", "NEBRASKA" = "NE", "NEVADA" = "NV", 
+                         "NEW HAMPSHIRE" = "NH", "NEW JERSEY" = "NJ", "NEW MEXICO" = "NM", "NEW YORK" = "NY", 
+                         "NORTH CAROLINA8" = "NC", "NORTH DAKOTA" = "ND", "OHIO" = "OH", "OKLAHOMA" = "OK",
+                         "OREGON" = "OR", "PENNSYLVANIA" = "PA", "RHODE ISLAND" = "RI", "SOUTH CAROLINA" = "SC", 
+                         "SOUTH DAKOTA" = "SD", "TENNESSEE" = "TN", "TEXAS" = "TX", "UTAH" = "UT", "VERMONT" = "VT",
+                         "VIRGINIA" = "VA", "WASHINGTON" = "WA", "WEST VIRGINIA" = "WV", "WISCONSIN" = "WI",
+                         "WYOMING" = "WY")
+
+replace = ""
+for(i in seq_along(fixed_FBI$State)){
+  if(is.na(fixed_FBI$State[[i]])){
+    fixed_FBI$State[[i]] = replace
+  } else{
+    replace = fixed_FBI$State[[i]]
+  }
+}
+
+final_FBI = fixed_FBI %>% 
+  dplyr::select(-Arson2) %>% 
+  rename("Violent Crime" = "Violent\ncrime",
+    "Murder" = "Murder and\nnonnegligent\nmanslaughter", 
+    "Rape" = "Rape1", 
+    "Aggravated Assault" = "Aggravated\nassault", 
+    "Property Crime" = "Property\ncrime", 
+    "Larceny" = "Larceny-\ntheft",
+    "Vehicle Theft" = "Motor\nvehicle\ntheft")
+
+FBI4 = final_FBI %>%
+              mutate(City=str_replace_all(City,"[,(0-9)]{1}","")) %>% 
+              mutate(City=ifelse(City=="Charlotte-Mecklenburg","Charlotte",City)) %>% 
+             mutate(City=str_replace(City," Metro",""))
+
+new_Fatal = Fatal %>% 
+  dplyr::select(city, state, gender, race, threat_level, flee)
+
+
+Fatal6 = filter(new_Fatal, gender != "None" & race != "None" & race != "Other" & threat_level != "undetermined") %>% rename(City = city, State = state)
+Fatal6$threat_level = recode(Fatal6$threat_level, "attack" = 1, other = 0) 
+
+Fatal6$threat_level = as.integer(Fatal6$threat_level)
+
+Question2 = FBI4 %>% transmute(City = City, 
+            State = State, 
+            Population = Population,
+            `Violent Crime Per 100,000` = (`Violent Crime` / Population) * 100000,
+            `Murder Per 100,000` = (Murder / Population) * 100000,
+            `Rape Per 100,000` = (Rape / Population) * 100000, 
+            `Robbery Per 100,000` = (Robbery / Population) * 100000,
+            `Property Crime Per 100,000` = (`Property Crime` / Population) * 100000,
+            `Aggravated Assault Per 100,000` = (`Aggravated Assault` / Population) * 100000,
+            `Burglary Per 100,000` = (Burglary / Population) * 100000,
+            `Larceny Per 100,000` = (Larceny / Population) * 100000,
+            `Vehicle Theft Per 100,000` = (`Vehicle Theft` / Population) * 100000
+            ) %>% drop_na()
+
+Question2.1 = Fatal6 %>% 
+  inner_join(Question2, by = c("City", "State"))
+
+Question2.2 = na.omit(Question2.1)
+Question2.2$threat_level = as.factor(Question2.2$threat_level)
+Question2.3 = Question2.2 %>% mutate(flee_new = ifelse(flee == "Not fleeing", 0, 1)) %>% rename("Gender" = "gender", "Race" = "race", "Threat Level" = "threat_level", "Flee" = "flee_new") %>% select(City, State, Gender, Race, `Threat Level`, Flee, everything(), -flee, -`Violent Crime Per 100,000`, -`Property Crime Per 100,000`)
+
+head(Question2.3) %>%
+  kbl() %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+```
+
+
+**Threat Level** was the other variable of particular interest to us, because in order for a fatal police shooting to take place, the police officer would have had to feel endangered beyond a reasonable doubt. The label of *Attack* under this variable is best described as having proposed a direct and immediate threat to the officer’s life, while the classification of *Other* means that there was some threat imposed, but not as direct as to be considered an attack. For the sake of categorization, I labeled *Attack* as 1 and *Other* as 0. What types of information causes a police officer to feel so threatened that they shoot someone? In my exploratory data analysis, I examined the relationship between **Threat Level** with the variables of **Race** and **Gender**. That graph is shown below.
+```{r, echo = FALSE,message = FALSE}
+test = data.frame(rCount = c(105, 105, 105, 105, 1539, 1539, 1539, 1539, 1057, 1057, 1057, 1057, 86, 86, 86, 86, 2936, 2936, 2936, 2936),
+              	gCount = c(271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452, 271, 5452),
+              	ID = 1:20)
+
+Relation = Fatal %>%
+  filter(gender == "F" | gender == "M") %>%
+  filter(threat_level == "attack"|threat_level == "other") %>%
+  filter(race == "W"|race == "B"|race == "H"|race == "A"|race == "H"|race == "N") %>%
+  group_by(race, threat_level, gender) %>%
+  summarize(n=n()) %>%
+  ungroup() %>%
+  mutate(ID = 1:20) %>%
+  inner_join(test, key = "ID") %>%
+  dplyr::select(1, 2, 3, 4, 6, 7) %>%
+  mutate(PercentRace = n/rCount, PercentGender = n/gCount, Victim = c("F, Attack", "M, Attack", "F, Other", "M, Other", "F, Attack", "M, Attack", "F, Other", "M, Other", "F, Attack", "M, Attack", "F, Other", "M, Other", "F, Attack", "M, Attack", "F, Other", "M, Other", "F, Attack", "M, Attack", "F, Other", "M, Other"), lbl = scales::percent(PercentRace))
+
+ggplot(Relation,
+   	aes(x = factor(race,
+                  	levels = c("A", "B",
+                             	"H", "N",
+                             	"W"),
+                  	labels = c("Asian", "Black", "Hispanic", "Native", "White")),
+       	y = PercentRace,
+       	fill = factor(Victim,
+                     	levels = c("F, Attack", "F, Other", "M, Attack", "M, Other"),
+                     	labels = c("Female Attack",
+                                	"Female Other",
+                                	"Male Attack",
+                                	"Male Other")))) +
+  geom_bar(stat = "identity",
+       	position = "fill") +
+  scale_y_continuous(breaks = seq(0, 1, .2),
+                 	label = percent) +
+  geom_text(aes(label = lbl),
+        	size = 2,
+        	position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "YlOrRd") +
+  labs(title = "Threat Level Demographics", x="Race",y = "Proportion", fill = "Victim Description") +
+  theme_minimal()
+```
+
+
+
+# RESULTS
+**QUESTION 1 **
+
+```{r,echo = FALSE}
+FullModel = lm(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_scaled)
+
+ctrlFull <- trainControl(method = "cv", number = 10)
+
+cvFull <- train(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_scaled, method = "lm", trControl = ctrlFull)
+
+FullModel_results = cvFull$results[2:4] %>% mutate(Model = "Full Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo = FALSE}
+ViolentModel = lm(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Population, data = Fatal_scaled)
+
+ctrlViolent <- trainControl(method = "cv", number = 10)
+
+cvViolent <- train(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Population, data = Fatal_scaled, method = "lm", trControl = ctrlViolent)
+
+ViolentModel_results = cvViolent$results[2:4] %>% mutate(Model = "Violent Model") %>% dplyr::select(Model, everything())
+```
+
+
+```{r,echo =FALSE}
+PropertyModel = lm(`Fatal Police Shootings Per 100,000` ~ `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_scaled)
+
+ctrlProperty <- trainControl(method = "cv", number = 10)
+
+cvProperty <- train(`Fatal Police Shootings Per 100,000` ~ `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_scaled, method = "lm", trControl = ctrlProperty)
+
+PropertyModel_results = cvProperty$results[2:4] %>% mutate(Model = "Property Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo =FALSE}
+PopulationModel = lm(`Fatal Police Shootings Per 100,000` ~ Population, data = Fatal_scaled)
+
+ctrlPopulation <- trainControl(method = "cv", number = 10)
+
+cvPopulation <- train(`Fatal Police Shootings Per 100,000` ~  Population, data = Fatal_scaled, method = "lm", trControl = ctrlPopulation)
+
+PopulationModel_results = cvPopulation$results[2:4] %>% mutate(Model = "Population Model") %>% dplyr::select(Model, everything())
+```
+
+My first question attempted to predict police shootings in a city by examining the crime statistics of that city. My first step was to split up the city data into two types. Violent crimes refer to crimes against people and include **Murder**, **Rape**, **Robbery**, and **Aggravated Assault**. Property crimes refer to crimes against property and include **Burglary**, **Larceny**, and **Vehicle Theft**. The final variable for the city data is the **Population**, expressed as per 100,000 people. 
+
+
+Based on these variables, four different models were created: (1) a full model with all of the variables, (2) a model with violent crimes and population, (3) a model with property crimes and population, (4) a model with only the population variable. I performed a 10-fold cross validation of the four models and examined the resulting *RMSE*, *R^2^*, and *MAE*. The Full Model and Property Model had the lowest *RMSE* and *MAE* out of the four models. Because the Property Model is the more reduced model, I chose to examine this model’s predicting abilities in more depth. 
+
+```{r,echo =FALSE}
+Results = do.call("rbind", list(FullModel_results, ViolentModel_results, PropertyModel_results, PopulationModel_results)) %>% 
+  kbl(caption = "10-fold Cross Validation of Models") %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+
+Results
+```
+
+```{r,echo =FALSE}
+fittedFull = predict(FullModel)
+fittedProperty = predict(PropertyModel)
+
+PropertyPlot1 <- ggplot(Fatal_scaled) +
+  geom_point(aes(x=`Fatal Police Shootings Per 100,000`,y=fittedProperty), alpha=0.25, stroke=0) +
+  geom_abline(slope = 1, intercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Actual Fatal Police Shootings Per 100,000", y = "Fitted Fatal Police Shootings Per 100,000", title = "Property Crime: Actual vs. Fitted")
+```
+
+
+```{r,echo =FALSE}
+residFull = residuals(FullModel)
+residProperty = residuals(PropertyModel)
+
+FullResidPlot1 <- ggplot(Fatal_scaled) +
+  geom_point(aes(x=fittedFull,y=residFull), alpha=0.25, stroke=0) +
+  geom_hline(yintercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Fitted", y = "Residual", title = "Full Model Residual Plot")
+
+PropertyResidPlot1 <- ggplot(Fatal_scaled) +
+  geom_point(aes(x=fittedProperty,y=residProperty), alpha=0.25, stroke=0) +
+  geom_hline(yintercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Fitted", y = "Residual", title = "Property Model Residual Plot")
+
+grid.arrange(PropertyPlot1, PropertyResidPlot1, ncol = 2)
+```
+
+
+After having selected the Property Model, I made a visual to compare the actual fatal police shootings with fitted data points from the model. I also examined a residual plot. An issue with these graphs was that a very large outlier occurred from the city of Industry, CA, which has a population of around 300 people but employs nearly 70,000 due to all of the industrial companies centered here. I decided to remove this major outlier and redo the 10-fold cross validation among the four models, in order to see if this decreased the error at all. The *RMSE* and *MAE* did decrease once the point was removed, but the *R^2^* worsened.
+
+```{r,echo=FALSE}
+Fatal_no_outlier <- Fatal_scaled[-1158,]
+
+FullModelOutlier = lm(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000`+  `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_no_outlier)
+
+ctrlFull <- trainControl(method = "cv", number = 10)
+
+cvFull_out <- train(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_no_outlier, method = "lm", trControl = ctrlFull)
+
+FullModel_results_out = cvFull_out$results[2:4] %>% mutate(Model = "Full Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo=FALSE}
+ViolentModelOutlier = lm(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Population, data = Fatal_no_outlier)
+
+ctrlViolent <- trainControl(method = "cv", number = 10)
+
+cvViolent_out <- train(`Fatal Police Shootings Per 100,000` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Population, data = Fatal_no_outlier, method = "lm", trControl = ctrlViolent)
+
+ViolentModel_results_out = cvViolent_out$results[2:4] %>% mutate(Model = "Violent Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo=FALSE}
+PropertyModelOutlier = lm(`Fatal Police Shootings Per 100,000` ~ `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_no_outlier)
+
+ctrlProperty <- trainControl(method = "cv", number = 10)
+
+cvProperty_out <- train(`Fatal Police Shootings Per 100,000` ~ `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, data = Fatal_no_outlier, method = "lm", trControl = ctrlProperty)
+
+PropertyModel_results_out = cvProperty_out$results[2:4] %>% mutate(Model = "Property Model") %>% dplyr::select(Model, everything())
+```
+
+```{r, echo=FALSE}
+PopulationModelOutlier = lm(`Fatal Police Shootings Per 100,000` ~ Population, data = Fatal_no_outlier)
+
+ctrlPopulation <- trainControl(method = "cv", number = 10)
+
+cvPopulation_out <- train(`Fatal Police Shootings Per 100,000` ~  Population, data = Fatal_no_outlier, method = "lm", trControl = ctrlPopulation)
+
+PopulationModel_results_out = cvPopulation_out$results[2:4] %>% mutate(Model = "Population Model") %>% dplyr::select(Model, everything())
+```
+
+```{r, echo=FALSE}
+Results_outlier = do.call("rbind", list(FullModel_results_out, ViolentModel_results_out, PropertyModel_results_out, PopulationModel_results_out)) %>% 
+  kbl(caption = "10-fold Cross Validation of Models W/O Industry, CA") %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+
+Results_outlier
+```
+
+My second cross validation did not display one clear “best” model, so I chose to continue making predictions with the Property Model. I made another graph to compare the fitted fatal police shootings versus actual fatal police shootings and another residual plot. It is important to note that I only included the fitted data points that were above zero, as there cannot be a negative number of fatal police shootings. The general shapes of these plots did not change much from the first one, so I performed log transformations to test if the Property Model would do a better job of predicting the logs of fatal police shootings. Unfortunately, the log fitted values and the log actual values produced a horizontal shape, indicating no relationship between the log of the actual shootings and the log of the fitted shootings. Therefore, I can conclude that the city crime statistics are not effective for predicting the incidence of fatal police shootings in cities.
+
+```{r,echo =FALSE}
+fittedProperty_out = predict(ViolentModelOutlier)
+
+Fatal_Property_out <- Fatal_no_outlier %>% mutate(Fitted = fittedProperty_out) %>% filter( Fitted > 0)
+
+Property_wo_Outlier_Plot <- ggplot(Fatal_Property_out) +
+  geom_point(aes(x=`Fatal Police Shootings Per 100,000`,y=Fitted), alpha=0.25, stroke=0) +
+  geom_abline(slope = 1, intercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Actual Fatal Police Shootings Per 100,000", y = "Fitted Fatal Police Shootings Per 100,000", title = "Violent Crime: Actual vs. Fitted")
+```
+
+
+```{r,echo =FALSE}
+residProperty_out = residuals(ViolentModelOutlier)
+
+Fatal_resids_out <-  Fatal_no_outlier %>% 
+  mutate(PropertyFitted = fittedProperty_out, PropertyResiduals = residProperty_out)
+
+Fatal_resids_out2 <- Fatal_resids_out %>% filter(PropertyFitted > 0)
+
+Property_wo_Outlier_Residuals <- ggplot(Fatal_resids_out2) +
+  geom_point(aes(x=PropertyFitted,y=PropertyResiduals), alpha=0.25, stroke=0) +
+  geom_hline(yintercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Fitted", y = "Residual", title = "Violent Model Residual Plot")
+
+grid.arrange(Property_wo_Outlier_Plot, Property_wo_Outlier_Residuals, ncol = 2)
+```
+
+```{r,echo =FALSE}
+TransformedPropMod = lm(log(`Fatal Police Shootings Per 100,000`) ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Population, data = Fatal_no_outlier)
+
+fittedProperty_trans = predict(TransformedPropMod)
+Fatal_Property_trans <- Fatal_no_outlier %>% mutate(LogFitted = fittedProperty_trans) %>% filter(LogFitted > 0)
+
+ggplot(Fatal_Property_trans) +
+  geom_point(aes(x=log(`Fatal Police Shootings Per 100,000`),y=LogFitted), alpha=0.25, stroke=0) +
+  geom_abline(slope = 1, intercept = 0, col = "red") + 
+  theme_minimal() +
+  labs(x = "Log Actual Fatal Police Shootings Per 100,000", y = "Log Fitted Fatal Police Shootings Per 100,000", title = "Violent Crime: Log Actual vs. Log Fitted")
+```
+
+**QUESTION 2 **
+
+In order to answer the second question, I attempted to predict a victim’s imposed threat level using different models. I made a data set that included 3,801 observations and included information about the victim’s demographics and the statistics for the city in which they were shot. I created three models: (1) a model with the victim’s demographics, including their race, gender, and whether they attempted to flee from the police, (2) a crime model that included crime statistics from each city, and (3) a relative importance model. 
+
+
+For the relative importance model, I measured the importance of each variable for prediction. First, I randomly divided the entire data into two bins. Since the data set was not large enough, I set it up so that I could repeat the extraction to increase the accuracy. I then used the first box as the training data set and the second box as the test data set and removed any invalid data. After this step, I tried to optimize the model. The first thing I did was filter the variables, removing the smallest one at a time based on the sum of squares of each variable until there were two variables left: **Flee** and **Murder**. After this step, I found that the AIC of the original data was -2763, and the AIC of the final completed operation was -2774. The change was not significant compared to the original data, so I used the actual data for the subsequent processes. I added a new predictor variable, R, to all variables and examined the relative weight of each variable by comparing the value of the average increase in R-squared caused by the addition of the new variable. In other words, when this new variable R is added, if the R-squared changes more, this variable has more influence on the overall model. Looking at the bar plot, I chose the four variables with the highest importance - **Murder**, **Aggravated Assault**, **Flee**, **Robbery** - for the relative importance model. 
+
+```{r,echo=FALSE,message = FALSE}
+Question2.4 <- select(Question2.3, -c('City', 'State'))
+
+Question2.4 <- rename(Question2.3, c("Murder"="Murder Per 100,000", "Rape"="Rape Per 100,000", "Robbery"="Robbery Per 100,000", "Aggravated"="Aggravated Assault Per 100,000", "Burglary"="Burglary Per 100,000", "Larceny"="Larceny Per 100,000", "Vehicle"="Vehicle Theft Per 100,000"))
+
+Question2.4[Question2.3 =='Not fleeing'] <- as.character(0)
+Question2.4[Question2.3 == 'M' | Question2.3 == 'A' | Question2.3 == 'Car'] <- as.character(1)
+Question2.4[Question2.3 == 'F' | Question2.3 == 'B' | Question2.3 == 'Foot'] <- as.character(2)
+Question2.4[Question2.3 == 'H' | Question2.3 == 'Other'] <- as.character(3)
+Question2.4[Question2.3 == 'N'] <- as.character(4)
+Question2.4[Question2.3 == 'O'] <- as.character(5)
+Question2.4[Question2.3 == 'W'] <- as.character(6)
+Question2.4$`Threat Level` <- as.numeric(Question2.4$`Threat Level`)
+Question2.4$Gender <- as.numeric(Question2.4$Gender)
+Question2.4$Race <- as.numeric(Question2.4$Race)
+Question2.4$Flee <- as.numeric(Question2.4$Flee)
+```
+
+
+```{r,echo=FALSE,include= FALSE}
+set.seed(1234)
+ind <- sample(2, nrow(Question2.4), replace=TRUE, prob=c(0.5, 0.5))
+
+trainData <- na.omit(Question2.4[ind==1,])
+testData <- na.omit(Question2.4[ind==2,])
+
+fit_all<-lm(`Threat Level`~., data = trainData)
+
+bwdmodel<-lm(`Threat Level`~Gender + Race +
+                   Flee +  Population +
+                   Murder+ Rape+ Robbery+ Aggravated+ Burglary +
+                   Larceny+ Vehicle, data = trainData)
+relweights <-
+  function(fit,...){                        
+    R <- cor(fit$model)  
+    nvar <- ncol(R)         
+    rxx <- R[2:nvar, 2:nvar]
+    rxy <- R[2:nvar, 1]     
+    svd <- eigen(rxx)       
+    evec <- svd$vectors                          
+    ev <- svd$values        
+    delta <- diag(sqrt(ev)) 
+    lambda <- evec %*% delta %*% t(evec)       
+    lambdasq <- lambda ^ 2  
+    beta <- solve(lambda) %*% rxy          
+    rsquare <- colSums(beta ^ 2)                  
+    rawwgt <- lambdasq %*% beta ^ 2   
+    import <- (rawwgt / rsquare) * 100
+    lbls <- names(fit$model[2:nvar])  
+    rownames(import) <- lbls
+    colnames(import) <- "Weights"
+    #import<-import[order(import["Weights"],decreasing=TRUE)]
+    #View(import)
+    return(import)
+  }
+
+relweights(bwdmodel, col="blue")
+```
+
+```{r,echo=FALSE}
+table = data.frame(
+    variables = c("Gender", "Race","Flee","Population","Murder","Rape","Robbery","Aggravated Assault","Burglary","Larceny","Vehicle Theft"),
+    Weights = c(0.544,5.943,15.081,0.542,29.075,5.659,13.137,17.128,2.692,6.753,3.445)
+   
+)
+```
+
+```{r,echo=FALSE}
+P <- ggplot(table,aes(reorder(variables,-Weights),Weights))
+P + geom_bar(stat = 'identity',fill="red",width=0.5,position="dodge") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5),plot.title = element_text(hjust = 0.5)) +
+  labs(x='Variables for Predicting',y='% Importance for Predicting',title='Relative Importance Barplot')
+
+```
+
+
+A 10-fold cross validation was performed to look at the *accuracy* and *kappa* of each of the models. The prediction *accuracy* for each model was around 65% and the *kappa* was around zero. The *kappa* coefficient measures the agreement between an actual value and an expected value on a range from 0-1. Values closer to 1 are more accurate.
+
+My models all appeared to be very similar in terms of *accuracy* and *kappa*, so I made a confusion matrix to explicitly see the breakdown of the models’ predictions. Of the 3,801 victims in the data set, the models correctly identified around 2,500 victims as threats to the police. Another 1-3 people were correctly identified as non threats. However, about 1,300 victims were falsely identified by the model as being threats, when they were actually non-threats, which is a very large amount of false positives. Alternatively, 0-2 people who were actually threats were labeled by the models as non-threats. My conclusion based on this data is that I would not want to use these models in a real setting in order to predict if a person was a threat, because one-third of the time, the models were inaccurate. Having such a high rate of inaccuracy could lead to more unnecessary shootings by police, for they perceive a non-threat as a threat and take physical action against the victim.
+
+```{r,echo=FALSE,include=FALSE}
+VictimModel = glm(`Threat Level` ~ Gender + Race + Flee, family = binomial, data = Question2.3)
+
+ctrlVictim <- trainControl(method = "cv", number = 10)
+
+cvVictim <- train(`Threat Level` ~ Gender + Race + Flee, data = Question2.3, method = "glm", family = "binomial", trControl = ctrlVictim)
+
+VictimModel_results = cvVictim$results[2:3] %>% mutate(Model = "Victim Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo=FALSE,include=FALSE}
+CrimeModel = glm(`Threat Level` ~ `Murder Per 100,000` + `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population, family = "binomial", data = Question2.3)
+
+ctrlCrime <- trainControl(method = "cv", number = 10)
+
+cvCrime <- train(`Threat Level` ~ `Murder Per 100,000`+ `Rape Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + `Burglary Per 100,000` + `Larceny Per 100,000` + `Vehicle Theft Per 100,000` + Population , data = Question2.3, method = "glm", family = "binomial", trControl = ctrlCrime)
+
+CrimeModel_results = cvCrime$results[2:3] %>% mutate(Model = "Crime Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo=FALSE,include=FALSE}
+BestModel = glm(`Threat Level` ~ `Murder Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Flee, family = "binomial", data = Question2.3)
+
+ctrlBest <- trainControl(method = "cv", number = 10)
+
+cvBest <- train(`Threat Level` ~ `Murder Per 100,000` + `Robbery Per 100,000` + `Aggravated Assault Per 100,000` + Flee, data = Question2.3, method = "glm", family = "binomial", trControl = ctrlBest)
+
+BestModel_results = cvBest$results[2:3] %>% mutate(Model = "Relative Importance Model") %>% dplyr::select(Model, everything())
+```
+
+```{r,echo=FALSE}
+predictedBest = predict(BestModel, type = "response")
+predictedVictim = predict(VictimModel, type = "response")
+predictedCrime = predict(CrimeModel, type = "response")
+
+
+BestAnalysis = Question2.3 %>% 
+  mutate(`Threat Level` = as.numeric(`Threat Level`), "Predicted" = ifelse(predictedBest >= 0.5, 1, 0)) %>% 
+  mutate(`Threat Level` = ifelse(`Threat Level` == 2, 1, 0))
+
+VictimAnalysis = Question2.3 %>% 
+  mutate(`Threat Level` = as.numeric(`Threat Level`), "Predicted" = ifelse(predictedVictim >= 0.5, 1, 0)) %>% 
+  mutate(`Threat Level` = ifelse(`Threat Level` == 2, 1, 0)) 
+
+CrimeAnalysis = Question2.3 %>% 
+  mutate(`Threat Level` = as.numeric(`Threat Level`), "Predicted" = ifelse(predictedCrime >= 0.5, 1, 0)) %>% 
+  mutate(`Threat Level` = ifelse(`Threat Level` == 2, 1, 0))
+```
+
+```{r,echo=FALSE}
+BestMatrix = confusionMatrix(as.factor(BestAnalysis$Predicted), as.factor(BestAnalysis$`Threat Level`))
+VictimMatrix = confusionMatrix(as.factor(VictimAnalysis$Predicted), as.factor(VictimAnalysis$`Threat Level`))
+CrimeMatrix = confusionMatrix(as.factor(CrimeAnalysis$Predicted), as.factor(CrimeAnalysis$`Threat Level`))
+BestTable = as.matrix(BestMatrix)
+VictimTable = as.table(VictimMatrix)
+CrimeTable = as.table(CrimeMatrix)
+```
+ 
+```{r,echo=FALSE}
+Question2Results = do.call("rbind", list(BestModel_results, VictimModel_results, CrimeModel_results)) %>% 
+  kbl(caption = "10-fold Cross Validation of Models") %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+Question2Results
+```
+
+```{r,echo=FALSE}
+Question2Positivity <-  data.frame(Model = c("Relative Importance Model", "Victim Model", "Crime Model"), 
+                                   CorrectT = c(BestTable[2,2], VictimTable[2,2], CrimeTable[2,2]),
+                                   CorrectN = c(BestTable[1,1], VictimTable[1,1], CrimeTable[1,1]),
+                                   FalseP = c(BestTable[2,1], VictimTable[2,1], CrimeTable[2,1]),
+                                   FalseN = c(BestTable[1,2], VictimTable[1,2], CrimeTable[1,2])) %>% 
+  rename("Correctly ID'd as a Threat" = CorrectT, "Correctly ID'd as a Non-threat" = CorrectN, "False Positive" = FalseP, "False Negative" = FalseN) %>% 
+  kbl(caption = "Confusion Matrices of Models") %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
+Question2Positivity
+```
+
+# CONCLUSION
+The first question I set out to explore was if the incidence of fatal police shootings in different cities compared to the overall crime statistics in these cities. The biggest indicator for the answer to this question was the Log Actual vs Log Fitted graph for the Property Model, excluding Industry, CA. This graph showed that there was no relationship between the incidence of fatal police shootings and the overall crime statistics of these cities. The scatter plot between Log Fitted and Log Actual shows an obvious horizontal trend, indicating no meaningful relationship exist between the two. Based on my findings for the first question, there is not significant evidence to say that a city's crime statistics are important for predicting the incidence of fatal police shootings in that city. The second question I explored was how the reported threat level of a victim changed based on the crime statistics of the city and the victim’s identity demographics. I saw no relation between these factors and reported threat level. This is indicated by the confusion matrix table. These models showed that only 2-4 people out of 3,801 people were categorized as non-threats in fatal police shootings, which is an alarmingly low rate. Because of this, I cannot use only these variables to form a categorization of threat level based on crime statistics or demographics. These conclusions are unusual. I assumed that a city's crime statistics would have an effect on the perceived threat levels and incidences of fatal police shootings, as cities with more crime would be deemed more dangerous. I also used prior knowledge to assume that demographics would play a role in incidents of fatal shootings. The models I produced to answer either of those questions led me to conclusions that indicated no relationship or comparisons between the variables I chose. Therefore, the conclusions were unexpected.
+
+These findings were inconclusive regarding variables that will most likely lead to a fatal police shooting by police, which indicates that people of any identity, in any place, can be afflicted with this type of violence. Reasons for this could include abuse of power by the police, increased crime rates, police taking a more violent approach with increase of social activism and protests, etc. Since I could not find a conclusive relationship between city crime statistics and other demographics with fatal police shootings, I cannot deduce whether the victims of these shootings were at fault, or whether it was a misconception on the police officer’s part. A better approach would be to now focus on factors like police funding, education, implicit bias training, and DEI (diversity, equity and inclusion) training at police stations, to better understand the police’s mentality behind these shootings. I could analyze police funding at each major city’s police headquarters, along with the level of education that is required to become part of the police force in each city. This would help us better understand why police brutality is so prominent in the country, and if need be, partially defund the police in areas where fatal police shootings are extremely high and increase police education to help them deal with crimes in a more humane manner. To further increase the usefulness of this data, I could search for other data sets that include cases of police brutality where the victim was not killed to better analyze whether factors like race, gender, etc. or city crime statistics affect the occurrence of a fatal police shooting. This data could then be analyzed for each major city to make a more in-depth conclusion on whether factors like race and gender really affect the occurrence of a fatal police shooting in major American cities. 
